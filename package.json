@@ -1,7 +1,7 @@
 {
   "name": "attorneylog",
   "private": false,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "自托管的团队工时与待办工作台：四板块待办、案件管理、打勾记工时、随记本、复盘与小时单导出。数据就是一个 JSON 文件，部署在你自己的服务器上。",
   "license": "MIT",
   "type": "module",

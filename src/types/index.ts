@@ -24,6 +24,13 @@ export const CONTRACT_STATUS_META: Record<ContractStatus, { label: string; color
   closed: { label: '已结项', color: '#534AB7' },
 };
 
+/** 删除墓碑：多设备按条合并时用于同步“已删除”这一事实 */
+export interface Tombstone {
+  c: 'todos' | 'entries' | 'notes';
+  id: string;
+  at: number; // 删除时间（毫秒）
+}
+
 /** 单笔收款记录 */
 export interface Payment {
   id: string;
@@ -73,6 +80,7 @@ export interface TimeEntry {
   description: string;
   minutes: number;
   billable: boolean;
+  updatedAt?: number; // 最后修改时间（毫秒），用于多设备按条合并
 }
 
 /** 待办板块定义（团队可自定义：增删改标签与颜色，管理员管理） */
@@ -140,6 +148,7 @@ export interface Todo {
   tags?: TodoTag[]; // 标签 id 列表（重要/紧急等，团队可自定义）
   ddl?: string | null; // 截止日期 YYYY-MM-DD；与标签一起决定自动优先级
   originDate?: string; // 首次创建日期；自动顺延到第二天后仍保留原始日期
+  updatedAt?: number; // 最后修改时间（毫秒），用于多设备按条合并
   assignedBy?: string | null; // 分配人 id；空 = 自己记录的
   participants?: string[]; // 共同参与人（负责人 memberId 之外的其他参与者），参与人也能看到并完成这条待办
 }

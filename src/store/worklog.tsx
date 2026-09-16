@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { ContractStatus, Matter, Member, Presence, PresenceStatus, ScratchNote, TimeEntry, Todo, TodoCategory, TodoCategoryDef, TodoTagDef } from '@/types';
+import type { ContractStatus, Matter, Member, Presence, PresenceStatus, ScratchNote, TimeEntry, Todo, TodoCategory, TodoCategoryDef, TodoTagDef, Tombstone } from '@/types';
 import { DEFAULT_TODO_CATEGORIES, DEFAULT_TODO_TAGS } from '@/types';
 import { apiFetch, kvGet, kvRemove, kvSet } from '@/lib/platform';
 import { addDays, today, uid } from '@/lib/dates';
@@ -15,6 +15,7 @@ interface State {
   todos: Todo[];
   notes: ScratchNote[];
   presence: Presence[]; // 团队打卡看板（每人每天一条，全员可见）
+  tombstones: Tombstone[]; // 已删除记录的墓碑（多设备按条合并时防“删了又复活”）
   todoCategories: TodoCategoryDef[]; // 待办板块（团队自定义，管理员管理）
   todoTags: TodoTagDef[]; // 待办标签（团队自定义，管理员管理）
   currentMemberId: string;
@@ -220,6 +221,11 @@ function insertByPriority(todos: Todo[], item: Todo, matters: Matter[], categori
 
 // ─── 空状态（未初始化/未登录时的骨架） ─────────────────────
 
+/** 生成一条删除墓碑 */
+function tomb(c: Tombstone['c'], id: string): Tombstone {
+  return { c, id, at: Date.now() };
+}
+
 function emptyState(): State {
   return {
     teamName: '团队工作台',
@@ -230,6 +236,7 @@ function emptyState(): State {
     todos: [],
     notes: [],
     presence: [],
+    tombstones: [],
     todoCategories: DEFAULT_TODO_CATEGORIES,
     todoTags: DEFAULT_TODO_TAGS,
     currentMemberId: '',
@@ -258,6 +265,12 @@ function migrate(s: State): State {
   if (typeof out.targetRate !== 'number') out = { ...out, targetRate: 0 };
   if (!Array.isArray(out.notes)) out = { ...out, notes: [] };
   if (!Array.isArray(out.presence)) out = { ...out, presence: [] };
+  if (!Array.isArray(out.tombstones)) out = { ...out, tombstones: [] };
+  {
+    // 墓碑保留 90 天，足够覆盖任何“旧标签页苏醒”的时间窗
+    const cutoff = Date.now() - 90 * 24 * 3600 * 1000;
+    out = { ...out, tombstones: out.tombstones.filter((t) => t && t.id && (t.at ?? 0) > cutoff) };
+  }
   // 自定义板块/标签：缺省时补默认值；过滤掉结构不合法的条目
   if (!Array.isArray(out.todoCategories) || out.todoCategories.length === 0) out = { ...out, todoCategories: DEFAULT_TODO_CATEGORIES };
   else out = { ...out, todoCategories: out.todoCategories.filter((c) => c && typeof c.id === 'string' && typeof c.label === 'string') };
@@ -393,7 +406,7 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
         return {
           ...s,
           todos: s.todos.map((td) =>
-            !td.done && td.date < t ? { ...td, date: t, originDate: td.originDate ?? td.date } : td,
+            !td.done && td.date < t ? { ...td, date: t, originDate: td.originDate ?? td.date, updatedAt: Date.now() } : td,
           ),
         };
       });
@@ -496,13 +509,14 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
       })),
     setTargetRate: (rate) => setState((s) => ({ ...s, targetRate: Math.max(0, rate) })),
     addEntry: (e) => setState((s) => ({ ...s, entries: [...s.entries, { ...e, id: uid() }] })),
-    deleteEntry: (id) => setState((s) => ({ ...s, entries: s.entries.filter((e) => e.id !== id) })),
+    deleteEntry: (id) =>
+      setState((s) => ({ ...s, tombstones: [...s.tombstones, tomb('entries', id)], entries: s.entries.filter((e) => e.id !== id) })),
     addTodo: ({ date, text, matterId, assigneeId, participantIds, tags, ddl, category }) =>
       setState((s) => {
         const owner = assigneeId ?? s.currentMemberId;
         const assigned = owner !== s.currentMemberId;
         const item: Todo = {
-          id: uid(), date, memberId: owner, text, matterId, done: false,
+          id: uid(), date, memberId: owner, text, matterId, done: false, updatedAt: Date.now(),
           actualMinutes: null, billable: matterId != null, entryId: null, originDate: date,
           assignedBy: assigned ? s.currentMemberId : null,
           participants: (participantIds ?? []).filter((p) => p !== owner),
@@ -532,7 +546,7 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
         const nextCategory = patch.category ?? td.category;
         const patched = s.todos.map((x) =>
           x.id === id
-            ? { ...x, text: nextText, matterId: nextMatterId, billable: nextBillable, memberId: nextOwner, participants: nextParticipants, tags: nextTags, ddl: nextDdl, category: nextCategory }
+            ? { ...x, text: nextText, matterId: nextMatterId, billable: nextBillable, memberId: nextOwner, participants: nextParticipants, tags: nextTags, ddl: nextDdl, category: nextCategory, updatedAt: Date.now() }
             : x,
         );
         // 标签、DDL 或分类变了：按优先级重新归位到对应板块
@@ -554,6 +568,7 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
                       matterId: nextMatterId,
                       billable: nextBillable,
                       category: nextMatterId ? '案件工作' : e.category,
+                      updatedAt: Date.now(),
                     }
                   : e,
               )
@@ -574,7 +589,9 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
         const target = groupIdx[groupIdx.indexOf(idx) + dir];
         if (target === undefined) return s;
         const todos = [...s.todos];
-        [todos[idx], todos[target]] = [todos[target], todos[idx]];
+        const t = Date.now();
+        todos[idx] = { ...todos[idx], updatedAt: t };
+        todos[target] = { ...todos[target], updatedAt: t };
         return { ...s, todos };
       }),
     reorderTodo: (id, beforeId) =>
@@ -590,11 +607,11 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
             (acc, t, i) => (t.date === from.date && t.memberId === from.memberId && effectiveCategory(t, s.matters, s.todoCategories) === fromCat ? i : acc),
             -1,
           );
-          todos.splice(lastIdx < 0 ? without.length : lastIdx + 1, 0, from);
+          todos.splice(lastIdx < 0 ? without.length : lastIdx + 1, 0, { ...from, updatedAt: Date.now() });
         } else {
           const to = without.findIndex((t) => t.id === beforeId);
           if (to < 0) return s;
-          todos.splice(to, 0, from);
+          todos.splice(to, 0, { ...from, updatedAt: Date.now() });
         }
         return { ...s, todos };
       }),
@@ -605,6 +622,7 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
         const copy: Todo = {
           ...td,
           id: uid(),
+          updatedAt: Date.now(),
           date,
           done: false,
           actualMinutes: null,
@@ -619,13 +637,14 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
     moveTodoToDate: (id, date) =>
       setState((s) => ({
         ...s,
-        todos: s.todos.map((x) => (x.id === id && !x.done ? { ...x, date } : x)),
+        todos: s.todos.map((x) => (x.id === id && !x.done ? { ...x, date, updatedAt: Date.now() } : x)),
       })),
     deleteTodo: (id) =>
       setState((s) => {
         const td = s.todos.find((x) => x.id === id);
         return {
           ...s,
+          tombstones: [...s.tombstones, tomb('todos', id), ...(td?.entryId ? [tomb('entries', td.entryId)] : [])],
           todos: s.todos.filter((x) => x.id !== id),
           entries: td?.entryId ? s.entries.filter((e) => e.id !== td.entryId) : s.entries,
         };
@@ -637,9 +656,9 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
         const entry: TimeEntry = {
           id: uid(), date: td.date, memberId: s.currentMemberId, matterId: td.matterId,
           category: td.matterId ? '案件工作' : (category ?? '其他事务'),
-          description: td.text, minutes, billable,
+          description: td.text, minutes, billable, updatedAt: Date.now(),
         };
-        const doneItem = { ...td, done: true, actualMinutes: minutes, billable, entryId: entry.id };
+        const doneItem = { ...td, done: true, actualMinutes: minutes, billable, entryId: entry.id, updatedAt: Date.now() };
         // 完成的待办沉到所属板块（同日、同负责人、同分类）的最底部，不再占注意力
         const cat = effectiveCategory(doneItem, s.matters, s.todoCategories);
         const others = s.todos.filter((x) => x.id !== id);
@@ -662,11 +681,11 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
         return {
           ...s,
           entries: td.entryId ? s.entries.filter((e) => e.id !== td.entryId) : s.entries,
-          todos: s.todos.map((x) => (x.id === id ? { ...x, done: false, actualMinutes: null, entryId: null } : x)),
+          todos: s.todos.map((x) => (x.id === id ? { ...x, done: false, actualMinutes: null, entryId: null, updatedAt: Date.now() } : x)),
         };
       }),
     updateTodoNote: (id, note) =>
-      setState((s) => ({ ...s, todos: s.todos.map((t) => (t.id === id ? { ...t, note } : t)) })),
+      setState((s) => ({ ...s, todos: s.todos.map((t) => (t.id === id ? { ...t, note, updatedAt: Date.now() } : t)) })),
     rolloverTodos: () =>
       setState((s) => {
         const t = today();
@@ -676,7 +695,7 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
           ...s,
           todos: s.todos.map((td) =>
             !td.done && td.date < t
-              ? { ...td, date: t, originDate: td.originDate ?? td.date }
+              ? { ...td, date: t, originDate: td.originDate ?? td.date, updatedAt: Date.now() }
               : td,
           ),
         };
@@ -691,7 +710,8 @@ export function WorklogProvider({ children }: { children: ReactNode }) {
         ...s,
         notes: s.notes.map((n) => (n.id === id ? { ...n, html, updatedAt: new Date().toISOString() } : n)),
       })),
-    deleteNote: (id) => setState((s) => ({ ...s, notes: s.notes.filter((n) => n.id !== id) })),
+    deleteNote: (id) =>
+      setState((s) => ({ ...s, tombstones: [...s.tombstones, tomb('notes', id)], notes: s.notes.filter((n) => n.id !== id) })),
     addMember: (name, role, color) =>
       setState((s) => ({
         ...s,

@@ -29,7 +29,7 @@
 | POST | /logout | token | 吊销令牌 |
 | POST | /reset-password | admin | 重置成员密码（成员下次登录重设） |
 | GET | /worklog-data | token | 拉取数据（按权限切片） |
-| POST | /worklog-data | token | 合并写入（服务端强制权限；管理员有防缩水护栏） |
+| POST | /worklog-data | token | 按条合并写入（LWW by updatedAt + 删除墓碑，防旧标签页整片覆盖；案件/成员列表有防缩水护栏） |
 
 ## 数据模型（src/types/index.ts）
 

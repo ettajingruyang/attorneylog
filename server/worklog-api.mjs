@@ -101,6 +101,7 @@ export function createWorklogApi(dataFile) {
       ...state,
       members,
       presence: Array.isArray(state.presence) ? state.presence : [],
+      tombstones: Array.isArray(state.tombstones) ? state.tombstones : [],
       todoCategories: Array.isArray(state.todoCategories) && state.todoCategories.length > 0 ? state.todoCategories : DEFAULT_TODO_CATEGORIES,
       todoTags: Array.isArray(state.todoTags) ? state.todoTags : DEFAULT_TODO_TAGS,
       teamName: typeof state.teamName === 'string' && state.teamName ? state.teamName : '团队工作台',
@@ -122,6 +123,7 @@ export function createWorklogApi(dataFile) {
       members: stripPw(s.members),
       matters: s.matters,
       presence: s.presence ?? [], // 打卡看板：全员可见
+      tombstones: s.tombstones ?? [], // 删除墓碑：全员同步
       todoCategories: s.todoCategories ?? DEFAULT_TODO_CATEGORIES, // 板块定义：全员可见，管理员可改
       todoTags: s.todoTags ?? DEFAULT_TODO_TAGS,
       targetRate: s.targetRate,
@@ -146,66 +148,87 @@ export function createWorklogApi(dataFile) {
     };
   }
 
-  // ── 合并写入：成员只能覆盖自己的切片；管理员整体写入（含分配给同事的待办） ──
+  // ── 按条合并（防旧标签页/旧设备整片覆盖） ──
+  // 同 id：updatedAt 更新者胜（notes 的 updatedAt 是 ISO 字符串，统一转毫秒比较）
+  // 墓碑（tombstones）标记已删除的记录：合并时从双方剔除，防止“删了又复活”
+  const recTs = (r) => (typeof r.updatedAt === "number" ? r.updatedAt : (r.updatedAt ? Date.parse(r.updatedAt) || 0 : 0));
+
+  function mergeRecords(srvList, incList, tombs, key) {
+    const tomb = new Set((tombs || []).filter((t) => t && t.c === key).map((t) => t.id));
+    const out = new Map();
+    for (const r of srvList || []) {
+      if (r && r.id && !tomb.has(r.id)) out.set(r.id, r);
+    }
+    for (const r of incList || []) {
+      if (!r || !r.id || tomb.has(r.id)) continue;
+      const prev = out.get(r.id);
+      if (!prev || recTs(r) >= recTs(prev)) out.set(r.id, r);
+    }
+    return [...out.values()];
+  }
+
+  function mergeTombstones(a, b) {
+    const map = new Map();
+    for (const t of [...(a || []), ...(b || [])]) {
+      if (t && t.c && t.id) {
+        const k = t.c + ":" + t.id;
+        const prev = map.get(k);
+        if (!prev || (t.at ?? 0) >= (prev.at ?? 0)) map.set(k, t);
+      }
+    }
+    return [...map.values()];
+  }
+
   function mergeInto(full, incoming, member) {
     const s = normalize(full);
-    if (member.isAdmin) {
-      // 防呆护栏：拒绝会导致数据大幅缩水的整体写入
-      //（例如某个浏览器拿着过期本地缓存误推）。日常逐条删除不受影响。
-      const shrink =
-        (Array.isArray(incoming.todos) && incoming.todos.length + 3 < (s.todos?.length ?? 0)) ||
-        (Array.isArray(incoming.entries) && incoming.entries.length + 3 < (s.entries?.length ?? 0));
-      if (shrink) {
-        const err = new Error('rejected: would shrink data');
+    const tombs = mergeTombstones(s.tombstones, incoming.tombstones);
+
+    // 个人数据（todos/entries/notes）一律按条合并：管理员与成员同一待遇，
+    // 旧标签页只能“新增”记录，永远无法抹掉服务器上已有的记录
+    const base = {
+      ...s,
+      tombstones: tombs,
+      entries: mergeRecords(s.entries, incoming.entries, tombs, "entries"),
+      todos: mergeRecords(s.todos, incoming.todos, tombs, "todos"),
+      notes: mergeRecords(s.notes, incoming.notes, tombs, "notes"),
+    };
+
+    if (!member.isAdmin) return base;
+
+    // 管理员可改共享数据：案件/成员/团队信息/目标时薪
+    const out = { ...base };
+    if (typeof incoming.teamName === "string" && incoming.teamName.trim()) out.teamName = incoming.teamName.trim();
+    if (typeof incoming.teamSubtitle === "string") out.teamSubtitle = incoming.teamSubtitle;
+    if (Array.isArray(incoming.matters)) {
+      // 防呆：案件列表不应变少（归档≠删除）
+      if (incoming.matters.length + 1 < (s.matters?.length ?? 0)) {
+        const err = new Error("stale tab detected: matters would shrink");
         err.statusCode = 409;
         throw err;
       }
-      const out = {
-        ...s,
-        entries: Array.isArray(incoming.entries) ? incoming.entries : s.entries,
-        todos: Array.isArray(incoming.todos) ? incoming.todos : s.todos,
-        notes: Array.isArray(incoming.notes) ? incoming.notes : s.notes,
-        presence: Array.isArray(incoming.presence) ? incoming.presence : (s.presence ?? []),
-      };
-      if (typeof incoming.teamName === 'string' && incoming.teamName.trim()) out.teamName = incoming.teamName.trim();
-      if (typeof incoming.teamSubtitle === 'string') out.teamSubtitle = incoming.teamSubtitle;
-      if (Array.isArray(incoming.matters)) out.matters = incoming.matters;
-      if (Array.isArray(incoming.todoCategories) && incoming.todoCategories.length > 0) out.todoCategories = incoming.todoCategories;
-      if (Array.isArray(incoming.todoTags)) out.todoTags = incoming.todoTags;
-      if (typeof incoming.targetRate === 'number') out.targetRate = incoming.targetRate;
-      if (typeof incoming.currentMemberId === 'string') out.currentMemberId = incoming.currentMemberId;
-      if (Array.isArray(incoming.members)) {
-        // 合并成员：pw/isAdmin 以服务端为准，客户端无法篡改
-        const byId = new Map(s.members.map((m) => [m.id, m]));
-        out.members = incoming.members.map((m) => {
-          const prev = byId.get(m.id);
-          return {
-            id: m.id, name: m.name, role: m.role, color: m.color,
-            joinedAt: m.joinedAt,
-            isAdmin: prev?.isAdmin ?? m.isAdmin ?? false,
-            pw: prev?.pw ?? null,
-          };
-        });
-      }
-      return out;
+      out.matters = incoming.matters;
     }
-    const me = member.id;
-    const involvesMe = (x) => x.memberId === me || (Array.isArray(x.participants) && x.participants.includes(me));
-    const mergeTodos = () => [
-      ...(s.todos || []).filter((x) => !involvesMe(x)),
-      ...(incoming.todos || []).filter(involvesMe),
-    ];
-    const mergeSlice = (key) => [
-      ...(s[key] || []).filter((x) => x.memberId !== me),
-      ...(incoming[key] || []).filter((x) => x.memberId === me),
-    ];
-    return {
-      ...s,
-      entries: mergeSlice('entries'),
-      todos: mergeTodos(),
-      notes: mergeSlice('notes'),
-      presence: mergeSlice('presence'), // 打卡：成员只能覆盖自己的
-    };
+    if (typeof incoming.targetRate === "number") out.targetRate = incoming.targetRate;
+    if (typeof incoming.currentMemberId === "string") out.currentMemberId = incoming.currentMemberId;
+    if (Array.isArray(incoming.members)) {
+      const byId = new Map(s.members.map((m) => [m.id, m]));
+      // 防呆：成员列表不应变少
+      if (incoming.members.length + 1 < byId.size) {
+        const err = new Error("stale tab detected: members would shrink");
+        err.statusCode = 409;
+        throw err;
+      }
+      out.members = incoming.members.map((m) => {
+        const prev = byId.get(m.id);
+        return {
+          id: m.id, name: m.name, role: m.role, color: m.color,
+          joinedAt: m.joinedAt,
+          isAdmin: prev?.isAdmin ?? m.isAdmin ?? false,
+          pw: prev?.pw ?? null,
+        };
+      });
+    }
+    return out;
   }
 
   // ── 令牌（30 天有效，过期自动吊销） ──
