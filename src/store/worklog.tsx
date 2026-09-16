@@ -270,6 +270,10 @@ function migrate(s: State): State {
       todos: out.todos.map((t) => ((t.category as unknown as string) === 'ai' ? { ...t, category: 'biz' as TodoCategory } : t)),
     };
   }
+  // 0.1) 板块定义里若残留已下线的 'ai' 默认板块，移除之（防止旧浏览器缓存复现）
+  if (Array.isArray(out.todoCategories) && out.todoCategories.some((c) => c.id === 'ai')) {
+    out = { ...out, todoCategories: out.todoCategories.filter((c) => c.id !== 'ai') };
+  }
   // 3) 管理员标记：未标记时第一位成员视为管理员
   if (out.members.some((m) => m.isAdmin === undefined)) {
     out = {
