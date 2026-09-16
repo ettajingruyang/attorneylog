@@ -1,4 +1,4 @@
-# EttaLog · 团队工时日志
+# AttorneyLog · 团队工时日志
 
 [English](#english) below
 
@@ -22,7 +22,7 @@
 ### 方式一：Docker（推荐）
 
 ```bash
-git clone <repo-url> && cd ettalog
+git clone <repo-url> && cd attorneylog
 docker compose up -d
 ```
 
@@ -33,7 +33,7 @@ docker compose up -d
 要求 Node.js ≥ 18。
 
 ```bash
-git clone <repo-url> && cd ettalog
+git clone <repo-url> && cd attorneylog
 npm ci
 npm run build
 npm start          # 默认 0.0.0.0:7100，数据在 ./data/
@@ -105,7 +105,7 @@ A **self-hosted team worklog & todo workbench** built for law firms and other pr
 **Docker (recommended):**
 
 ```bash
-git clone <repo-url> && cd ettalog
+git clone <repo-url> && cd attorneylog
 docker compose up -d
 ```
 

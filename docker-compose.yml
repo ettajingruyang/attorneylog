@@ -1,8 +1,8 @@
 services:
   worklog:
     build: .
-    # 或者直接用发布镜像：image: yourname/ettalog:latest
-    container_name: ettalog
+    # 或者直接用发布镜像：image: yourname/attorneylog:latest
+    container_name: attorneylog
     restart: unless-stopped
     ports:
       - "7100:7100"
