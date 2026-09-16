@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ── 主题系统 ──
+     素白 snow（浅·苹果系）/ 奶油 cream（浅·理想系暖调）/ 月夜 moon（深·Kimi 系）/ 石墨 graphite（深·苹果黑）
+     --c-* 语义色给 Tailwind 的 app/surface/line/ink/paper/ink2/dim/gold/goldink/hov/wash；
+     其余为 shadcn/ui 组件变量（HSL 三元组） */
+
+  :root,
+  [data-theme='snow'] {
+    color-scheme: light;
+    --c-bg: #f5f5f7; --c-surface: #ffffff; --c-line: #e4e4e8;
+    --c-ink: #1d1d1f; --c-paper: #f5f5f7; --c-ink-2: #55555c; --c-muted: #8e8e93;
+    --c-accent: #0071e3; --c-accent-ink: #0a6ac9; --c-hover: #ededf0; --c-wash: #e8f1fb;
+
+    --background: 240 10% 97%;
+    --foreground: 240 6% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 6% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 6% 12%;
+    --primary: 240 6% 12%;
+    --primary-foreground: 240 10% 97%;
+    --secondary: 240 8% 93%;
+    --secondary-foreground: 240 6% 20%;
+    --muted: 240 8% 94%;
+    --muted-foreground: 240 4% 42%;
+    --accent: 240 8% 93%;
+    --accent-foreground: 240 6% 15%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 8% 88%;
+    --input: 240 8% 86%;
+    --ring: 211 100% 45%;
+    --radius: 0.7rem;
+  }
+
+  [data-theme='cream'] {
+    color-scheme: light;
+    --c-bg: #faf5ec; --c-surface: #fffefa; --c-line: #ecdfcb;
+    --c-ink: #2b2520; --c-paper: #faf5ec; --c-ink-2: #6b6055; --c-muted: #ac9f8e;
+    --c-accent: #e07b4f; --c-accent-ink: #c05a31; --c-hover: #f2e9da; --c-wash: #f9e3d6;
+
+    --background: 38 44% 94%;
+    --foreground: 26 16% 14%;
+    --card: 40 50% 99%;
+    --card-foreground: 26 16% 14%;
+    --popover: 40 50% 99%;
+    --popover-foreground: 26 16% 14%;
+    --primary: 26 16% 14%;
+    --primary-foreground: 38 44% 94%;
+    --secondary: 36 38% 90%;
+    --secondary-foreground: 26 20% 22%;
+    --muted: 36 38% 91%;
+    --muted-foreground: 30 14% 42%;
+    --accent: 36 38% 90%;
+    --accent-foreground: 26 20% 20%;
+    --destructive: 8 65% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 36 32% 84%;
+    --input: 36 32% 82%;
+    --ring: 18 72% 52%;
+  }
+
+  [data-theme='moon'] {
+    color-scheme: dark;
+    --c-bg: #171b34; --c-surface: #1f2445; --c-line: #38406b;
+    --c-ink: #e9ecf9; --c-paper: #1b1f3a; --c-ink-2: #bdc4e6; --c-muted: #7d86b3;
+    --c-accent: #e5c07b; --c-accent-ink: #eacf8f; --c-hover: #262c52; --c-wash: #323a63;
+
+    --background: 230 34% 14%;
+    --foreground: 229 38% 92%;
+    --card: 230 34% 19%;
+    --card-foreground: 229 38% 92%;
+    --popover: 230 34% 19%;
+    --popover-foreground: 229 38% 92%;
+    --primary: 229 38% 90%;
+    --primary-foreground: 230 34% 15%;
+    --secondary: 230 26% 26%;
+    --secondary-foreground: 229 38% 90%;
+    --muted: 230 26% 24%;
+    --muted-foreground: 229 24% 68%;
+    --accent: 230 26% 26%;
+    --accent-foreground: 229 38% 92%;
+    --destructive: 4 60% 52%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 230 24% 30%;
+    --input: 230 24% 33%;
+    --ring: 44 60% 65%;
+  }
+
+  [data-theme='graphite'] {
+    color-scheme: dark;
+    --c-bg: #161617; --c-surface: #222224; --c-line: #3a3a3d;
+    --c-ink: #f2f2f4; --c-paper: #1c1c1e; --c-ink-2: #c7c7cc; --c-muted: #8e8e93;
+    --c-accent: #5e9eff; --c-accent-ink: #7fb1ff; --c-hover: #2c2c2e; --c-wash: #2e3a4e;
+
+    --background: 240 4% 9%;
+    --foreground: 240 8% 95%;
+    --card: 240 3% 14%;
+    --card-foreground: 240 8% 95%;
+    --popover: 240 3% 14%;
+    --popover-foreground: 240 8% 95%;
+    --primary: 240 8% 92%;
+    --primary-foreground: 240 5% 10%;
+    --secondary: 240 4% 19%;
+    --secondary-foreground: 240 8% 92%;
+    --muted: 240 4% 17%;
+    --muted-foreground: 240 4% 64%;
+    --accent: 240 4% 19%;
+    --accent-foreground: 240 8% 92%;
+    --destructive: 0 68% 52%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 4% 25%;
+    --input: 240 4% 27%;
+    --ring: 213 100% 68%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* 衬线标题字（Tailwind 3 不支持 @utility，用普通类） */
+.font-display {
+  font-family: Georgia, 'Times New Roman', 'Songti SC', 'STSong', 'SimSun', serif;
+  letter-spacing: -0.01em;
+}
+
+/* 打卡看板的小人轻轻起伏（减少动效偏好下关闭） */
+@keyframes buddy-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.buddy-bob {
+  animation: buddy-bob 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .buddy-bob { animation: none; }
+}

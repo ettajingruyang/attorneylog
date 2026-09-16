@@ -1,0 +1,17 @@
+services:
+  worklog:
+    build: .
+    # 或者直接用发布镜像：image: yourname/ettalog:latest
+    container_name: ettalog
+    restart: unless-stopped
+    ports:
+      - "7100:7100"
+    volumes:
+      - ./data:/data # 团队数据就存在这个目录：备份/迁移 = 拷贝这个目录
+    environment:
+      - PORT=7100
+      - HOST=0.0.0.0
+      - DATA_DIR=/data
+      # 公开演示实例才需要：配合 npm run seed:demo 使用，
+      # 登录页会显示「任选成员 + 此密码」的提示
+      # - DEMO_PASSWORD=demo123
